@@ -1,0 +1,75 @@
+WITH referidos_count AS (SELECT
+		 "Customer Referral Source Deal" AS referred_by_deal_id,
+		 round(COUNT(*), 1) AS referidos
+FROM  "Deals" 
+WHERE	 "Customer Referral Source Deal"  IS NOT NULL
+GROUP BY  "Customer Referral Source Deal") ,
+tickets_referidos_summary AS (SELECT
+		 d3."Customer Referral Source Deal" AS referidor_deal_id,
+		 round(COUNT(DISTINCT st."Id"), 1) AS total_tickets_referidos
+FROM  "Deals" d3
+LEFT JOIN "Service Ticket" st ON st."Pertaining to Deal"  = d3."Id"  
+WHERE	 d3."Customer Referral Source Deal"  IS NOT NULL
+GROUP BY  d3."Customer Referral Source Deal") ,
+tickets_referidos_detalle AS (SELECT
+		 d3."Customer Referral Source Deal" AS referidor_deal_id,
+		 D4."Preferred Name",
+		 st."Id" AS ticket_id,
+		 st."Service Stage" AS "Service Stage",
+		 st."Service Type" AS "Service Type",
+		 st."Area of Service" AS "Area of Service",
+		 d3.Id AS referido_id,
+		 d3."Preferred Name" AS "contact name",
+		 d3."Customer Email" AS "customer email",
+		 d3."Main Phone" AS "main phone"
+FROM  "Deals" d3
+LEFT JOIN "Service Ticket" st ON st."Pertaining to Deal"  = d3."Id" 
+LEFT JOIN "Deals" D4 ON d3."Customer Referral Source Deal"  = D4.Id  
+WHERE	 d3."Customer Referral Source Deal"  IS NOT NULL
+ AND	st."Area of Service"  IN ( '(2) Comercial'  , '(4) Rechazos Financiamiento'  , '(4) Rechazos Financiamiento'  , '(7) Permisos'  , '(9) Cotizacion Servicio'  )
+ AND	st."Service Type"  IN ( '(1) Status Cheques'  , '(1) Status Medicion Neta'  , '(1) Status Updates'  , '(2) Estudio de carga'  , '(2) Visita Pre-Diseño'  , '(3) Corrección de tamaño de Breaker'  , '(3) Cotización'  , '(3) CPs'  , '(3) Limpieza de Paneles Solares'  , '(3) Prepa Stuff'  , '(3) Rechazo Generac'  , '(3) Reubicacion de Paneles Solares'  , '(3) Señalamientos CDBG'  , '(3) Service - Impedancia Related'  , '(3) Tesla Wall Connector'  , '(3) Transfer Switch Installation'  , '(4) Visita Pre Instalacion'  , '(4) Solar Repairs'  , '(6) Base nueva (Pedestal)'  , '(6) Base nueva (Sencilla)'  , '(6) Certificacion en PREPA / Gestion Perito'  , '(6) Mantenimiento de base'  , '(6) Movimiento de Trenza'  , '(7) CDBG- Permit Team'  , '(10) Anclaje de Equipos'  , '(10) Re-instalacion Paneles Solares'  ))
+SELECT
+		 c.*,
+		 trs.total_tickets_referidos AS "Service Tickets de Referidos",
+		 round(trs.total_tickets_referidos / c.referidos, 1) AS average_tickets,
+		 dll."Service Stage" AS "Service Stage",
+		 dll."Area of Service" AS "Area of Service",
+		 dll."Service Type" AS "Service Type",
+		 
+			CASE
+				 WHEN c.referidos  > 9 THEN 'VIP 10+'
+				 WHEN c."System Size (W)"  >= 12000 THEN 'VIP SYSTEM'
+				 WHEN c.referidos  BETWEEN 5  AND  9 THEN 'VIP'
+				 WHEN c.referidos  = 4 THEN 'Casi VIP'
+				 WHEN c.referidos  BETWEEN 1  AND  3 THEN '1 - 3 Referidos'
+				 WHEN c.referidos  = 0 THEN 'Sin Referidos'
+				 ELSE NULL
+			 END AS "VIP STATUS"
+FROM (	SELECT
+			 d2."Preferred Name" AS "Cliente",
+			 MAX(d2.Id) AS id,
+			 MAX(CONCAT('https://crm.zoho.com/crm/org699641359/tab/Potentials/', d2.Id)) AS link_crm,
+			 MAX(d2."Stage") AS "Installation Stage",
+			 MAX(d2."Closing Date") AS "Caso Vendido Closing Date",
+			 MAX(d."Created Time") AS "created time",
+			 MAX(d2."Installation Completion Date") AS "installation completion date",
+			 MAX(d2."System Size (W)") AS "System Size (W)",
+			 MAX(d2."Priority") AS priority,
+			 MAX(d."Promo items") AS "Promo Items",
+			 MAX(d."Promo Item Status") AS "Promo Item Status",
+			 MAX(d."Promo Item Notes") AS "Promo Item Notes",
+			 MAX(d."Promo Items Payment Status") AS "Promo Items Payment Status",
+			 MAX(d."Underwriting Notes") AS "Underwriting Notes",
+			 MAX(CONCAT(COALESCE(d."Promo Item Notes", ''), COALESCE(d."On Hold Notes", ''), COALESCE(d."Underwriting Notes", ''))) AS notes_summary,
+			 COALESCE(rc.referidos, 0) AS referidos
+	FROM  "Deals" d
+JOIN "Deals" d2 ON d2."Id"  = d."Customer Referral Source Deal" 
+LEFT JOIN referidos_count rc ON rc.referred_by_deal_id  = d2.Id  
+	WHERE	 d."Customer Referral Source Deal"  IS NOT NULL
+	GROUP BY d2."Preferred Name",
+		 d2.Id,
+		  rc.referidos 
+) AS  c
+LEFT JOIN tickets_referidos_summary trs ON trs.referidor_deal_id  = c.id 
+LEFT JOIN tickets_referidos_detalle dll ON dll.referidor_deal_id  = c.id  
+ 
